@@ -65,7 +65,8 @@ Airflow (use the official constraints file):
 ```bash
 pip install "apache-airflow==3.3.2" --constraint \
   https://raw.githubusercontent.com/apache/airflow/constraints-3.3.2/constraints-3.12.txt
-export AIRFLOW_HOME=$PWD/.airflow MLOPS_WORKDIR=/tmp/mlops-ref
+export AIRFLOW_HOME=$PWD/.airflow MLOPS_WORKDIR=/tmp/mlops-ref \
+  AIRFLOW__CORE__DAGS_FOLDER=$PWD/dags AIRFLOW__CORE__LOAD_EXAMPLES=False
 airflow db migrate && python dags/credit_risk_training.py      # dag.test()
 ```
 

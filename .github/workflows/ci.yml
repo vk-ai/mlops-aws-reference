@@ -58,6 +58,10 @@ jobs:
       AIRFLOW_VERSION: "3.3.2"
       AIRFLOW_HOME: ${{ github.workspace }}/.airflow
       MLOPS_WORKDIR: ${{ github.workspace }}/.dagrun
+      # Airflow 3 dag.test() needs the DAG serialized from the configured dags folder,
+      # which otherwise defaults to $AIRFLOW_HOME/dags.
+      AIRFLOW__CORE__DAGS_FOLDER: ${{ github.workspace }}/dags
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
