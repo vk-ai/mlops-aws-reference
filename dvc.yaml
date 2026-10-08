@@ -1,0 +1,40 @@
+stages:
+  prepare:
+    cmd: mlops-ref prepare
+    deps:
+      - data/raw/german.data-numeric
+      - src/mlops_ref/data.py
+      - src/mlops_ref/validate.py
+      - src/mlops_ref/features.py
+    params:
+      - data
+    outs:
+      - data/interim
+  featurize:
+    cmd: mlops-ref featurize
+    deps:
+      - data/interim
+      - src/mlops_ref/features.py
+    params:
+      - features
+    outs:
+      - data/processed
+  train:
+    cmd: mlops-ref train
+    deps:
+      - data/processed
+      - src/mlops_ref/model.py
+      - src/mlops_ref/train.py
+    params:
+      - train
+    outs:
+      - models/model.pt
+  evaluate:
+    cmd: mlops-ref evaluate
+    deps:
+      - models/model.pt
+      - data/processed
+      - src/mlops_ref/metrics.py
+    metrics:
+      - metrics/test_metrics.json:
+          cache: false

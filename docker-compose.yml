@@ -1,0 +1,21 @@
+# Local stand-in for the AWS setup: an MLflow server + the scoring service.
+# Untested here (the build machine has no Docker). Register models first with
+#   MLFLOW_TRACKING_URI=http://localhost:5000 mlops-ref run-all   (twice, for a canary)
+services:
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.17.0
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --artifacts-destination /mlflow/artifacts --serve-artifacts
+    ports: ["5000:5000"]
+    volumes: ["mlflow:/mlflow"]
+  scoring:
+    build: .
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      CANARY_WEIGHT: "10"
+    ports: ["8080:8080"]
+    depends_on: [mlflow]
+volumes:
+  mlflow: {}

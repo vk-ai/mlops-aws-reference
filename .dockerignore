@@ -1,0 +1,9 @@
+.git
+.dvc/cache
+data/interim
+data/processed
+models
+mlflow.db
+mlartifacts
+terraform/.terraform
+**/__pycache__

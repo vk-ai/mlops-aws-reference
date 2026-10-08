@@ -1,0 +1,107 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: mlops-ref prepare
+    deps:
+    - path: data/raw/german.data-numeric
+      hash: md5
+      md5: dd6d1bd8f4bcc4555b900b9c00955c33
+      size: 102000
+    - path: src/mlops_ref/data.py
+      hash: md5
+      md5: 898acdf50af8daf313bb402033bc4149
+      size: 2399
+    - path: src/mlops_ref/features.py
+      hash: md5
+      md5: e71cacd3eefbfc6748cadaaef7d708f0
+      size: 1887
+    - path: src/mlops_ref/validate.py
+      hash: md5
+      md5: d71556ba9fe711aee2f95b50938e44ee
+      size: 1416
+    params:
+      params.yaml:
+        data:
+          test_size: 0.2
+          seed: 42
+    outs:
+    - path: data/interim
+      hash: md5
+      md5: 30bd76a0a08b2888f8fa51369a0a7632.dir
+      size: 36847
+      nfiles: 2
+  featurize:
+    cmd: mlops-ref featurize
+    deps:
+    - path: data/interim
+      hash: md5
+      md5: 30bd76a0a08b2888f8fa51369a0a7632.dir
+      size: 36847
+      nfiles: 2
+    - path: src/mlops_ref/features.py
+      hash: md5
+      md5: e71cacd3eefbfc6748cadaaef7d708f0
+      size: 1887
+    params:
+      params.yaml:
+        features:
+          engine: pandas
+    outs:
+    - path: data/processed
+      hash: md5
+      md5: 2c6ac73738fef7804b0e5c909aec2437.dir
+      size: 46041
+      nfiles: 2
+  train:
+    cmd: mlops-ref train
+    deps:
+    - path: data/processed
+      hash: md5
+      md5: 2c6ac73738fef7804b0e5c909aec2437.dir
+      size: 46041
+      nfiles: 2
+    - path: src/mlops_ref/model.py
+      hash: md5
+      md5: 5e8e007caafade6a9b16db101e2aac90
+      size: 1068
+    - path: src/mlops_ref/train.py
+      hash: md5
+      md5: dccfa01ce00ff43ac2b540b37b749628
+      size: 2412
+    params:
+      params.yaml:
+        train:
+          hidden:
+          - 32
+          - 16
+          epochs: 80
+          lr: 0.003
+          weight_decay: 0.0001
+          batch_size: 64
+          seed: 7
+    outs:
+    - path: models/model.pt
+      hash: md5
+      md5: 5ec9fe6ed43d1e1f01511b2c709c7333
+      size: 9201
+  evaluate:
+    cmd: mlops-ref evaluate
+    deps:
+    - path: data/processed
+      hash: md5
+      md5: 2c6ac73738fef7804b0e5c909aec2437.dir
+      size: 46041
+      nfiles: 2
+    - path: models/model.pt
+      hash: md5
+      md5: 5ec9fe6ed43d1e1f01511b2c709c7333
+      size: 9201
+    - path: src/mlops_ref/metrics.py
+      hash: md5
+      md5: 30b1ea761f1014664709529dd8558b35
+      size: 1817
+    outs:
+    - path: metrics/test_metrics.json
+      hash: md5
+      md5: 80b09f7aaaf337a6fcae1c59b5d9b626
+      size: 151

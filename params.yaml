@@ -1,0 +1,24 @@
+data:
+  test_size: 0.2
+  seed: 42
+features:
+  engine: pandas        # pandas | spark
+train:
+  hidden: [32, 16]
+  epochs: 80
+  lr: 0.003
+  weight_decay: 0.0001
+  batch_size: 64
+  seed: 7
+gate:
+  min_auc: 0.70
+  max_auc_drop: 0.02    # challenger may not be worse than the champion by more than this
+drift:
+  share_threshold: 0.2  # alert if more than 20% of the 27 feature columns drift (train vs held-out test: 7%)
+  stattest_threshold: null
+canary:
+  initial_weight: 10
+  min_requests: 200
+  max_error_rate_delta: 0.02
+  max_latency_ratio: 1.5
+  max_positive_rate_delta: 0.10

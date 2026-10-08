@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  MLFLOW_DISABLE_AGENT_HINT: "1"
+  TORCH_INDEX: https://download.pytorch.org/whl/cpu
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install (CPU torch)
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url "$TORCH_INDEX" torch
+          pip install -e ".[dev]"
+      - name: Tests (Spark, Airflow and DVC tests skip without their extras)
+        run: pytest -q -rs --cov=mlops_ref --cov-report=term
+      - name: Demo run
+        run: python demo/run_demo.py
+
+  spark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install with PySpark
+        run: |
+          pip install --index-url "$TORCH_INDEX" torch
+          pip install -e ".[dev,spark]"
+      - name: PySpark feature job matches pandas
+        run: pytest -q -m spark
+
+  airflow:
+    runs-on: ubuntu-latest
+    env:
+      AIRFLOW_VERSION: "3.3.2"
+      AIRFLOW_HOME: ${{ github.workspace }}/.airflow
+      MLOPS_WORKDIR: ${{ github.workspace }}/.dagrun
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Airflow (official constraints), then the project
+        run: |
+          pip install "apache-airflow==${AIRFLOW_VERSION}" \
+            --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-3.12.txt"
+          pip install --index-url "$TORCH_INDEX" torch
+          pip install -e ".[dev]"
+      - name: DAG structure
+        run: pytest -q -m airflow
+      - name: Full DAG run in-process (dag.test())
+        run: |
+          airflow db migrate
+          python dags/credit_risk_training.py
+          cat "$MLOPS_WORKDIR/deploy/canary.json"
+
+  dvc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install with DVC
+        run: |
+          pip install --index-url "$TORCH_INDEX" torch
+          pip install -e ".[dev,dvc]"
+      - name: DVC round trip test (scratch repo + local remote)
+        run: pytest -q -m dvc
+      - name: dvc repro and metrics diff against the committed metrics
+        run: |
+          dvc repro
+          {
+            echo "### dvc metrics diff (HEAD vs this run)"
+            dvc metrics diff HEAD --md
+          } >> "$GITHUB_STEP_SUMMARY"
+          python -c "import json,yaml; m=json.load(open('metrics/test_metrics.json')); g=yaml.safe_load(open('params.yaml'))['gate']; assert m['auc'] >= g['min_auc'], m; print('auc', m['auc'])"
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+      - name: fmt, validate and mocked-provider tests (no AWS credentials; nothing is applied)
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false -input=false
+          terraform validate
+          terraform test

@@ -1,0 +1,9 @@
+{
+  "accuracy": 0.755,
+  "auc": 0.8121,
+  "expected_cost": 0.585,
+  "f1": 0.637,
+  "positive_rate": 0.375,
+  "precision": 0.5733,
+  "recall": 0.7167
+}

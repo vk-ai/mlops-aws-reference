@@ -1,0 +1,5 @@
+[core]
+    remote = local
+    autostage = true
+['remote "local"']
+    url = /tmp/mlops-aws-reference-dvc-remote
