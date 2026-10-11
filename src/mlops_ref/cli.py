@@ -21,6 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("evaluate", help="test metrics -> metrics/test_metrics.json (DVC stage)")
     d = sub.add_parser("drift", help="Evidently drift report on a simulated production batch")
     d.add_argument("--strength", type=float, default=1.0)
+    sub.add_parser("monitor", help="delayed-label performance monitoring scenarios (drift = early warning only)")
     r = sub.add_parser("run-all", help="the whole DAG in one process, including MLflow registration")
     r.add_argument("--strength", type=float, default=1.0)
     r.add_argument("--tracking-uri")
@@ -45,6 +46,11 @@ def main(argv: list[str] | None = None) -> int:
     elif a.cmd == "drift":
         cur = pipeline.make_current_batch(f"{proc}/test.parquet", w, a.strength)
         print(json.dumps(pipeline.drift_check(f"{proc}/train.parquet", cur, w, p["drift"]["share_threshold"])))
+    elif a.cmd == "monitor":
+        ref = json.loads(open(f"{w}/metrics/test_metrics.json").read())
+        out = pipeline.monitor_performance(f"{w}/models/model.pt", f"{proc}/train.parquet", f"{proc}/test.parquet", ref, p["drift"]["share_threshold"], w)
+        for name, rep in out.items():
+            print(f"{name}: status={rep['status']} drift_alert={rep['drift_alert']} labelled={rep['n_labelled']}/{rep['n_scored']} :: {rep['reason']}")
     elif a.cmd == "run-all":
         print(json.dumps(pipeline.run_all(w, p, a.tracking_uri, a.strength), default=str, indent=2))
     elif a.cmd == "serve":
