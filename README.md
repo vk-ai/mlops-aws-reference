@@ -145,10 +145,41 @@ DB, Python 3.12). All 10 tasks succeeded in 23 s. The run logged
 `deploy/canary.json` = `{"action": "initial_release", "stable": "1", ...}`.
 The CI `airflow` job repeats this run.
 
+## Performance monitoring with delayed labels (drift = early warning only)
+
+Default labels for a credit decision arrive months later, and data drift is a poor
+stand-in for model performance: inputs can shift while the model stays accurate, and
+accuracy can fall with no input drift at all. `mlops_ref.monitoring` logs each score to
+SQLite, joins labels when they arrive, and judges performance only on labelled rows:
+
+- `insufficient_labels`: under 100 labels or under 30% of the window labelled. A drift
+  alert is reported as an **early warning** only; nothing claims the model is worse.
+- `degraded`: AUC is more than 0.05 below the training-time test AUC **and** the 95%
+  bootstrap CI's upper bound is below it (or expected cost is clearly higher).
+- `ok`: labels say performance holds. If drift fired, `drift_without_degradation` is
+  set so the drift alert can be closed.
+
+Demo step 3b (`python demo/run_demo.py`, or `mlops-ref monitor` after `dvc repro`),
+reference test AUC 0.812:
+
+```text
+covariate_shift_real_rows       drift_share=0.148 alert=False labelled=120/120 AUC 0.855 [0.774, 0.932] -> ok
+synthetic_feature_shift         drift_share=0.259 alert=True  labelled=200/200 AUC 0.809 [0.740, 0.865] -> ok
+concept_drift_no_feature_drift  drift_share=0.074 alert=False labelled=200/200 AUC 0.633 [0.555, 0.716] -> degraded
+labels_not_arrived              drift_share=0.259 alert=True  labelled= 46/200 AUC n/a -> insufficient_labels
+```
+
+The drift alert fires on a batch the model still scores well, and stays silent on the
+one where the model has actually broken. That's the point of the feature.
+
+Why: [r/MachineLearning "Data drift is not a good indicator of model performance degradation"](https://www.reddit.com/r/MachineLearning/comments/13xf9h8/d_data_drift_is_not_a_good_indicator_of_model/),
+[r/mlops on silent model drift](https://www.reddit.com/r/mlops/comments/1vrira5/what_do_you_use_for_ai_observability_when_models/),
+[arXiv 2604.15740, evidence sufficiency under delayed ground truth](https://arxiv.org/pdf/2604.15740v1).
+
 ## Tests
 
 ```
-pytest -q                     44 passed, 1 skipped (airflow)   ~1.5 min, 92% line coverage (Python 3.12, with dvc + pyspark + Java 21)
+pytest -q                     51 passed, 1 skipped (airflow)   ~1.5 min, 92% line coverage before the monitoring module (Python 3.12, with dvc + pyspark + Java 21)
 pytest -q -m airflow          1 passed                         (in an Airflow 3.3.2 environment)
 terraform test                3 passed                         (mocked AWS provider)
 ```
@@ -157,7 +188,7 @@ Python 3.11 without the extras: 42 passed, 2 skipped (spark, airflow).
 
 Covered: checksum and fetch (including a tampered download), the data
 contract, the stratified split, AUC against a brute-force pairwise definition
-with ties, deterministic training, model save/load, drift with and without the
+with ties, delayed-label monitoring (late joins, early-warning-only drift, degradation without drift, real-row scenarios), deterministic training, model save/load, drift with and without the
 simulated shift, the webhook POST, every canary decision path, the scoring API
 (in-process router and `SERVE_ALIAS`), and an end-to-end run against a scratch
 MLflow registry: initial release, canary, a rejected challenger and promotion
@@ -182,6 +213,7 @@ CI (`.github/workflows/ci.yml`) runs five jobs, all without cloud credentials:
 - `terraform validate` and `terraform test` with a mocked AWS provider.
 
 **Stubbed, simulated or not verified:**
+- **Performance monitoring runs on replays, not live traffic.** The rows and labels in `covariate_shift_real_rows` are real (a re-weighted sample of the 200 held-out rows). The feature shift in `synthetic_feature_shift`, the 35% label flips in `concept_drift_no_feature_drift`, and the label arrival times (60-day delay with jitter, ~20% arrived in the last scenario) are simulated. The thresholds (100 labels, 30%, 0.05 AUC) are my choices. With 120-200 labelled rows the AUC CIs are about ±0.07, so only large drops can be detected. The monitor is not wired into the serving API or the Airflow DAG.
 - **Nothing has been deployed to AWS.** There is no `terraform plan` against a real account, and there is no VPC, MLflow server or CI/CD-to-AWS. The module expects an existing VPC and an MLflow tracking server. The mocked-provider tests check the wiring, not that AWS would accept every setting.
 - **The Dockerfile and docker-compose.yml are untested,** because the build machine has no Docker.
 - **"Production" traffic is simulated.** Drift is checked on a synthetic shifted copy of the test set. The canary replays held-out rows with their labels, which in practice would arrive weeks later. The broken canary in step 7 is a constant function.

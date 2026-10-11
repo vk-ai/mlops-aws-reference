@@ -122,6 +122,18 @@ def drift_check(reference_path: str, current_path: str, workdir: str | Path, sha
     return result
 
 
+def monitor_performance(model_path: str, train_path: str, test_path: str, reference: dict, share_threshold: float, workdir: str | Path | None = None) -> dict:
+    """Delayed-label performance monitoring scenarios (see mlops_ref.monitoring)."""
+    from .monitoring import scenarios
+
+    out = scenarios(load_model(model_path), pd.read_parquet(train_path), pd.read_parquet(test_path), reference, share_threshold)
+    if workdir is not None:
+        path = Path(workdir) / "reports" / "performance_monitoring.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(out, indent=2) + "\n")
+    return out
+
+
 def deploy_canary(version: str, gate_result: dict, workdir: str | Path, initial_weight: int, tracking_uri: str | None = None) -> dict:
     """Write the deployment spec the router/infra consumes and move registry aliases.
 

@@ -59,6 +59,14 @@ def main() -> None:
         d = pipeline.drift_check(r1["features"]["train"], cur, work / f"s{strength}", params["drift"]["share_threshold"])
         print(f"   simulated shift={strength}: drift_share={d['drift_share']} threshold={d['share_threshold']} alert={d['alert']} drifted={d['drifted_columns']}")
 
+    show("3b. performance monitoring with delayed labels (drift is only an early warning)")
+    mon = pipeline.monitor_performance(r1["train"]["model_path"], r1["features"]["train"], r1["features"]["test"], r1["evaluate"],
+                                       params["drift"]["share_threshold"], work)
+    for name, rep in mon.items():
+        cur = rep.get("current", {})
+        auc = f"AUC {cur['auc']} {cur['auc_ci95']}" if cur else "AUC n/a"
+        print(f"   {name:<32} drift_share={rep['drift_share']:<6} alert={str(rep['drift_alert']):<5} labelled={rep['n_labelled']:>3}/{rep['n_scored']} {auc} -> {rep['status']}")
+
     tracking.configure(uri)
     c = params["canary"]
     guardrails = Guardrails(c["min_requests"], c["max_error_rate_delta"], c["max_latency_ratio"], c["max_positive_rate_delta"])
